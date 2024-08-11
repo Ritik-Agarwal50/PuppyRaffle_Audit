@@ -84,3 +84,37 @@ Consider using a specific version of Solidity in your contracts instead of a wid
 Solc releases new version of compiler verison. USing older version prevent access to new solidity security checks. We also recommended using new version like `0.8.18`.
 
 
+# Gas
+
+## [G-1] Unchanged state variable should be declared constant or immutablw.
+
+Reading from sttoragw is much more expensive than constant.
+ 
+Instance :
+- `PupptRaffle::raffleDuration` should be `immutable`
+- `PuppyRaffle:commonIamgeURI` should be `constant`
+- `PuppyRaffle::rareImageUri` should be `constant`
+- `PuppyRaffle::legendaryImageUri` should be `constant`
+
+
+
+## L-3: Missing checks for `address(0)` when assigning values to address state variables
+
+Check for `address(0)` when assigning values to address state variables.
+
+<details><summary>2 Found Instances</summary>
+
+
+- Found in src/PuppyRaffle.sol [Line: 62](src/PuppyRaffle.sol#L62)
+
+	```solidity
+	        feeAddress = _feeAddress;
+	```
+
+- Found in src/PuppyRaffle.sol [Line: 174](src/PuppyRaffle.sol#L174)
+
+	```solidity
+	        feeAddress = newFeeAddress;
+	```
+
+</details>
