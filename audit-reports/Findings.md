@@ -1,4 +1,71 @@
-### [M-#] Looping to players array to check for duplicate in `PuppyRaffle:enterRaffle` is potential DOS attack, incremneting gas cost for future entrants.
+### [H-1] Reentrancy attack  in `PuppyRaffle::refund` allows entrant to darin raffle fund.
+
+**Description** The `PuppyRaffle::refund` function doesnot allow CEI (Checks, effects and interaction) and as a result it drain the entire raffle funds.
+
+In the `PuppyRaffle::refund` function , we make the external call to the `msg.sender` address and only after making this external call do we update the `players` array. This allow msg.sender to call the refund function and drain the raffle funds.
+
+```javascript
+    function refund() external {
+        require(
+            block.timestamp > raffleEnd,
+            "PuppyRaffle: Raffle has not ended"
+        );
+        require(
+            !isRaffleEnded,
+            "PuppyRaffle: Raffle has already ended"
+        );
+        isRaffleEnded = true;
+        for (uint256 i = 0; i < players.length; i++) {
+            payable(players[i]).transfer(entranceFee);
+        }
+        players = new address[](0);
+    }
+```
+
+**Impact** An attacker can drain the entire raffle funds by calling the `PuppyRaffle::refund` function.
+
+**Proof of Concept** 
+
+```javascript
+
+    function test_refund() external {
+        vm.txGasPrice(1);
+        uint256 playerNum = 10;
+        address[] memory players = new address[](playerNum);
+        for (uint256 i = 0; i < playerNum; i++) {
+            players[i] = address(i);
+        }
+        puppyRaffle.enterRaffle{value: entranceFee * playerNum}(players);
+        uint256 balanceBefore = address(puppyRaffle).balance;
+        puppyRaffle.refund();
+        uint256 balanceAfter = address(puppyRaffle).balance;
+        assert(balanceBefore == balanceAfter);
+    }
+    
+```
+
+**Recommended Mitigation** The recommended mitigation is to follow the Checks-Effects-Interactions pattern. This means that all the checks should be done before any effects or interactions are made. In this case, the `players` array should be updated before making the external call to the `msg.sender` address.
+
+```javascript
+    function refund() external {
+        require(
+            block.timestamp > raffleEnd,
+            "PuppyRaffle: Raffle has not ended"
+        );
+        require(
+            !isRaffleEnded,
+            "PuppyRaffle: Raffle has already ended"
+        );
+        isRaffleEnded = true;
+        address[] memory playersTemp = players;
+        players = new address[](0);
+        for (uint256 i = 0; i < playersTemp.length; i++) {
+            payable(playersTemp[i]).transfer(entranceFee);
+        }
+    }
+```
+
+### [M-1] Looping to players array to check for duplicate in `PuppyRaffle:enterRaffle` is potential DOS attack, incremneting gas cost for future entrants.
 
 **Description** The `PuppyRaffle::enterRaffle` loops to the player arrays to check dup. However the longer the `PuppyRaffle::players` array is the more checks a new player will have to make. This means the gas cost for palyers who enter at start has too pay too low gas fee as comparre to who enter last has to pay alot of gasFees.
 
@@ -24,8 +91,6 @@ If we have 2 set of number of player enter in raffle the gas cost will be high f
 - 1st batch of gas used- 6252039
 - 2st batch of gas used- 18068129
 This is more than a 3x of the used from the 1st batch.
-<details>
-<Summary>POC</Summary>
 
 ```javascript
  function test_breakingforDosc() external {
@@ -56,8 +121,6 @@ This is more than a 3x of the used from the 1st batch.
         assert(gasUsedFirst < gasUsedSecond);
     }
  ```   
-
- </details>
  <br>
  
 **Recommended Mitigation** There are few recommendation.
@@ -69,8 +132,6 @@ This is more than a 3x of the used from the 1st batch.
 
 Consider using a specific version of Solidity in your contracts instead of a wide version. For example, instead of `pragma solidity ^0.8.0;`, use `pragma solidity 0.8.0;`
 
-<details><summary>1 Found Instances</summary>
-
 
 - Found in src/PuppyRaffle.sol [Line: 2](src/PuppyRaffle.sol#L2)
 
@@ -78,7 +139,6 @@ Consider using a specific version of Solidity in your contracts instead of a wid
 	pragma solidity ^0.7.6;
 	```
 
-</details>
 
 ## I-1 Using older version is not recommended.
 Solc releases new version of compiler verison. USing older version prevent access to new solidity security checks. We also recommended using new version like `0.8.18`.
@@ -97,12 +157,28 @@ Instance :
 - `PuppyRaffle::legendaryImageUri` should be `constant`
 
 
+### [G-2] Storage variable in a loop should be cached.
+
+Everytime you use `players.length` you read from storage, as opposed to memory which is more gas efficient.
+
+```diff
++     uint256 playerLength = players.length
+-     for (uint256 i = 0; i < players.length - 1; i++) {
++     for (uint256 i = 0; i < playerLength - 1; i++) {
+-            for (uint256 j = i + 1; j < players.length; j++) {
++            for (uint256 j = i + 1; j < playerLegth; j++) {
+                require(
+                    players[i] != players[j],
+                    "PuppyRaffle: Duplicate player"
+                );
+            }
+        }
+```        
 
 ## L-3: Missing checks for `address(0)` when assigning values to address state variables
 
 Check for `address(0)` when assigning values to address state variables.
 
-<details><summary>2 Found Instances</summary>
 
 
 - Found in src/PuppyRaffle.sol [Line: 62](src/PuppyRaffle.sol#L62)
@@ -117,4 +193,3 @@ Check for `address(0)` when assigning values to address state variables.
 	        feeAddress = newFeeAddress;
 	```
 
-</details>
