@@ -63,3 +63,24 @@ This is more than a 3x of the used from the 1st batch.
 **Recommended Mitigation** There are few recommendation.
     1. Consider the allowing then duplicate. User can make new wallwt address anyways to enter raffle, so duplicate check doesnt prevent the samw person from entering multiple time, only the same wallet address.
     2. Consider using mapping to check for duplicates. This would allow constant time loopup of wheather a user has already entered or not.
+
+
+## L-2: Solidity pragma should be specific, not wide
+
+Consider using a specific version of Solidity in your contracts instead of a wide version. For example, instead of `pragma solidity ^0.8.0;`, use `pragma solidity 0.8.0;`
+
+<details><summary>1 Found Instances</summary>
+
+
+- Found in src/PuppyRaffle.sol [Line: 2](src/PuppyRaffle.sol#L2)
+
+	```solidity
+	pragma solidity ^0.7.6;
+	```
+
+</details>
+
+## I-1 Using older version is not recommended.
+Solc releases new version of compiler verison. USing older version prevent access to new solidity security checks. We also recommended using new version like `0.8.18`.
+
+

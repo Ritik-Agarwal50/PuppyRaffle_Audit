@@ -110,6 +110,7 @@ contract PuppyRaffle is ERC721, Ownable {
     /// @param playerIndex the index of the player to refund. You can find it externally by calling `getActivePlayerIndex`
     /// @dev This function will allow there to be blank spots in the array
     function refund(uint256 playerIndex) public {
+        //@audit mev
         address playerAddress = players[playerIndex];
         require(
             playerAddress == msg.sender,
@@ -137,6 +138,8 @@ contract PuppyRaffle is ERC721, Ownable {
                 return i;
             }
         }
+        //@audit what if address is at 0 index?
+
         return 0;
     }
 
@@ -152,24 +155,34 @@ contract PuppyRaffle is ERC721, Ownable {
             "PuppyRaffle: Raffle not over"
         );
         require(players.length >= 4, "PuppyRaffle: Need at least 4 players");
-        //@Q chekc if the player is active
+        //@audit if the player is active
         //@Q check if the player is not the previous winner
         //@ check id the player is owner
         //@ check and perfom this transactiion mulitple time ttry to brute force this
+        //use chainling VRF for randomness
         uint256 winnerIndex = uint256(
             keccak256(
                 abi.encodePacked(msg.sender, block.timestamp, block.difficulty)
             )
         ) % players.length;
+        //@audit check the ubderfloww and overflow issues because we are doing some math here
         address winner = players[winnerIndex];
         uint256 totalAmountCollected = players.length * entranceFee;
+        //Q is the 80 percent is correct
         uint256 prizePool = (totalAmountCollected * 80) / 100;
         uint256 fee = (totalAmountCollected * 20) / 100;
+        //Total fees is which admin will get
+        //This is ovwerflow issue
+        //@audit thie is overflow issue
+        // use big uint values lin 256
+        //This will be a problem if the total fees is more than the uint64
+        //unsafe casting
         totalFees = totalFees + uint64(fee);
 
         uint256 tokenId = totalSupply();
 
         // We use a different RNG calculate from the winnerIndex to determine rarity
+        //@audit random number generation issue
         uint256 rarity = uint256(
             keccak256(abi.encodePacked(msg.sender, block.difficulty))
         ) % 100;
@@ -184,6 +197,8 @@ contract PuppyRaffle is ERC721, Ownable {
         delete players;
         raffleStartTime = block.timestamp;
         previousWinner = winner;
+        //@audit need some checks as welll
+        //@audit this might be a reentrancy issue
         (bool success, ) = winner.call{value: prizePool}("");
         require(success, "PuppyRaffle: Failed to send prize pool to winner");
         _safeMint(winner, tokenId);
