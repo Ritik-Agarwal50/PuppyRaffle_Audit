@@ -372,6 +372,8 @@ Check for `address(0)` when assigning values to address state variables.
           feeAddress = newFeeAddress;
   ```
 
+
+
 ## Informational
 
 ### I-1 Using older version is not recommended.
