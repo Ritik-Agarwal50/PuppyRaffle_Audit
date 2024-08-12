@@ -424,7 +424,7 @@ It can be cofuncing to see number literals in a codebase, and it's much more rea
 
 ```
 
-### [I-6] Unchanged variables should be constant or immutable
+### [I-5] Unchanged variables should be constant or immutable
 
 Constant Instance:
 
@@ -440,6 +440,22 @@ Immutable Instance:
 ```javascript
     PuppyRaffle.raffleDuration (src/PuppyRaffle.sol#30) should be immutable
 ```
+
+### [I-6] Centralization Risk for trusted owners
+
+Contracts have owners with privileged rights to perform admin tasks and need to be trusted to not perform malicious updates or drain funds.
+
+- Found in src/PuppyRaffle.sol [Line: 18](src/PuppyRaffle.sol#L18)
+
+	```solidity
+	contract PuppyRaffle is ERC721, Ownable {
+	```
+
+- Found in src/PuppyRaffle.sol [Line: 173](src/PuppyRaffle.sol#L173)
+
+	```solidity
+	    function changeFeeAddress(address newFeeAddress) external onlyOwner {
+	```
 
 ## Gas
 
