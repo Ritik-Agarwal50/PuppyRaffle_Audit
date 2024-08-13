@@ -456,6 +456,27 @@ Contracts have owners with privileged rights to perform admin tasks and need to 
 	```solidity
 	    function changeFeeAddress(address newFeeAddress) external onlyOwner {
 	```
+## I-7: Event is missing `indexed` fields
+
+Index event fields make the field more quickly accessible to off-chain tools that parse events. However, note that each index field costs extra gas during emission, so it's not necessarily best to index the maximum allowed per event (three fields). Each event should use three indexed fields if there are three or more fields, and gas usage is not particularly of concern for the events in question. If there are fewer than three fields, all of the fields should be indexed.
+
+- Found in src/PuppyRaffle.sol [Line: 53](src/PuppyRaffle.sol#L53)
+
+	```solidity
+	    event RaffleEnter(address[] newPlayers);
+	```
+
+- Found in src/PuppyRaffle.sol [Line: 54](src/PuppyRaffle.sol#L54)
+
+	```solidity
+	    event RaffleRefunded(address player);
+	```
+
+- Found in src/PuppyRaffle.sol [Line: 55](src/PuppyRaffle.sol#L55)
+
+	```solidity
+	    event FeeAddressChanged(address newFeeAddress);
+	```
 
 ## Gas
 
