@@ -1,3 +1,102 @@
+---
+title: PuppyRaffle Protocol Audit Report
+author: Ritik Agarwal
+date: August. 13, 2024
+---
+
+Lead Auditors:
+    - Ritik Agarwal
+
+# Table of Contents
+
+- [Table of Contents](#table-of-contents)
+- [Protocol Summary](#protocol-summary)
+- [Disclaimer](#disclaimer)
+- [Risk Classification](#risk-classification)
+- [Audit Details](#audit-details)
+  - [Scope](#scope)
+  - [Roles](#roles)
+  - [Issues found](#issues-found)
+- [Findings](#findings)
+  - [High](#high)
+    - [\[H-1\] Reentrancy attack in `PuppyRaffle::refund` allows entrant to darin raffle fund.](#h-1-reentrancy-attack-in-puppyrafflerefund-allows-entrant-to-darin-raffle-fund)
+    - [\[H-2\] Weak Randomness in `PuppyRaffle::selectWinner` allows attacker to predict the winner and also predict the rare puppy NFt in their foviur.](#h-2-weak-randomness-in-puppyraffleselectwinner-allows-attacker-to-predict-the-winner-and-also-predict-the-rare-puppy-nft-in-their-foviur)
+    - [\[H-3\] Interger overflow of `PuppyRaffle::totalFees` loses fees.](#h-3-interger-overflow-of-puppyraffletotalfees-loses-fees)
+  - [Medium](#medium)
+    - [\[M-1\] Looping to players array to check for duplicate in `PuppyRaffle:enterRaffle` is potential DOS attack, incremneting gas cost for future entrants.](#m-1-looping-to-players-array-to-check-for-duplicate-in-puppyraffleenterraffle-is-potential-dos-attack-incremneting-gas-cost-for-future-entrants)
+    - [\[M-2\] Smart Contract wallet raffle winners without a receive or a fallback will block the start of a new contest](#m-2-smart-contract-wallet-raffle-winners-without-a-receive-or-a-fallback-will-block-the-start-of-a-new-contest)
+  - [Lows](#lows)
+    - [L-1: Solidity pragma should be specific, not wide](#l-1-solidity-pragma-should-be-specific-not-wide)
+    - [L-2 `PuppyRaffle::getActivePlayerIndex` return 0 for non existent player and for player which is at index 0, causing a player at index 0 to incorrectly think they are not in the raffle.](#l-2-puppyrafflegetactiveplayerindex-return-0-for-non-existent-player-and-for-player-which-is-at-index-0-causing-a-player-at-index-0-to-incorrectly-think-they-are-not-in-the-raffle)
+    - [L-3: Missing checks for `address(0)` when assigning values to address state variables](#l-3-missing-checks-for-address0-when-assigning-values-to-address-state-variables)
+  - [Informational](#informational)
+    - [\[I-1\] Using older version is not recommended.](#i-1-using-older-version-is-not-recommended)
+    - [\[I-2\] `PuppyRaffle::selectWinner` does not follow the checks-effects-interactions pattern, which is not a best practice.](#i-2-puppyraffleselectwinner-does-not-follow-the-checks-effects-interactions-pattern-which-is-not-a-best-practice)
+    - [\[I-3\] Use of `magic numbers` in `PuppyRaffle::enterRaffle` should be avoided.](#i-3-use-of-magic-numbers-in-puppyraffleenterraffle-should-be-avoided)
+    - [\[I-4\] \_isActivePlayer is never used and should be removed](#i-4-_isactiveplayer-is-never-used-and-should-be-removed)
+    - [\[I-5\] Unchanged variables should be constant or immutable](#i-5-unchanged-variables-should-be-constant-or-immutable)
+    - [\[I-6\] Centralization Risk for trusted owners](#i-6-centralization-risk-for-trusted-owners)
+    - [\[I-7\]: Event is missing `indexed` fields](#i-7-event-is-missing-indexed-fields)
+  - [Gas](#gas)
+    - [\[G-1\] Unchanged state variable should be declared constant or immutablw.](#g-1-unchanged-state-variable-should-be-declared-constant-or-immutablw)
+    - [\[G-2\] Storage variable in a loop should be cached.](#g-2-storage-variable-in-a-loop-should-be-cached)
+
+# Protocol Summary
+
+This project is to enter a raffle to win a cute dog NFT. The protocol should do the following:
+
+1. Call the `enterRaffle` function with the following parameters:
+   1. `address[] participants`: A list of addresses that enter. You can use this to enter yourself multiple times, or yourself and a group of your friends.
+2. Duplicate addresses are not allowed
+3. Users are allowed to get a refund of their ticket & `value` if they call the `refund` function
+4. Every X seconds, the raffle will be able to draw a winner and be minted a random puppy
+5. The owner of the protocol will set a feeAddress to take a cut of the `value`, and the rest of the funds will be sent to the winner of the puppy.
+
+# Disclaimer
+
+The Ritik Agarwal team makes all effort to find as many vulnerabilities in the code in the given time period, but holds no responsibilities for the findings provided in this document. A security audit by the team is not an endorsement of the underlying business or product. The audit was time-boxed and the review of the code was solely on the security aspects of the Solidity implementation of the contracts.
+
+# Risk Classification
+
+|            |        | Impact |        |     |
+| ---------- | ------ | ------ | ------ | --- |
+|            |        | High   | Medium | Low |
+|            | High   | H      | H/M    | M   |
+| Likelihood | Medium | H/M    | M      | M/L |
+|            | Low    | M      | M/L    | L   |
+
+We use the [CodeHawks](https://docs.codehawks.com/hawks-auditors/how-to-evaluate-a-finding-severity) severity matrix to determine severity. See the documentation for more details.
+
+# Audit Details
+
+- Commit Hash: 22bbbb2c47f3f2b78c1b134590baf41383fd354f
+- In Scope:
+
+## Scope
+
+```
+./src/
+# -- PuppyRaffle.sol
+```
+
+## Roles
+
+Owner - Deployer of the protocol, has the power to change the wallet address to which fees are sent through the `changeFeeAddress` function.
+Player - Participant of the raffle, has the power to enter the raffle with the `enterRaffle` function and refund value through `refund` function.
+
+## Issues found
+
+| Severity | Number of issues found |
+| -------- | ---------------------- |
+| High     | 2                      |
+| Medium   | 2                      |
+| Low      | 3                      |
+| Info     | 7                      |
+| Gas      | 2                      |
+| Total    | 16                     |
+
+# Findings
+
 <!-- @format -->
 
 ## High
